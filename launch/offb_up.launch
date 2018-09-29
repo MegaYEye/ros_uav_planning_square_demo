@@ -1,0 +1,10 @@
+<launch>
+	<param name = "/infoday/length" value = "1"/>
+	<param name = "/infoday/width" value = "1"/>
+	<param name = "/infoday/height" value = "0.5"/>
+	<param name = "/infoday/period" value = "3"/>
+	<include file="$(find vicon_bridge)/launch/vicon.launch"/>
+	<include file="$(find mavros)/launch/FJ005.launch"/>
+	<node pkg="offb" type ="offb_node" name="offb_node" output="screen"/>
+</launch>
+
