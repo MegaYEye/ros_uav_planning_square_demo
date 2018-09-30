@@ -21,5 +21,8 @@ target_link_libraries(offb_node ${catkin_LIBRARIES})
 
 
 
+<<<<<<< HEAD
 add_executable(hole_node src/hole_node.cpp)
 target_link_libraries(hole_node ${catkin_LIBRARIES})
+=======
+>>>>>>> 521dbb8a13b20389cac1a49d3eedfe864c201574
