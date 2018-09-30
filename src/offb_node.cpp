@@ -7,6 +7,7 @@
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <nav_msgs/Path.h>
+#include <math.h>
 #include <mavros_msgs/CommandBool.h>
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/State.h>
@@ -16,8 +17,222 @@ using namespace std;
 class Planning {
 public:
 	Planning(){idx=0;}
+	void test_curve() {
+		vector<geometry_msgs::PoseStamped> out;
+		ROS_INFO("----TEST SIGMOID-----");
+		gen_sigmoid(5, 10,10,out,-1);
+		for (auto p:out) {
+			ROS_INFO("(%f,%f)",
+								p.pose.position.x,
+								p.pose.position.y);
+		}
+		vector<geometry_msgs::PoseStamped> out2;
+		ROS_INFO("----TEST HALFSIGMOID-----");
+		gen_halfsigmoid(5, 10,10,out2,-1);
+		for (auto p:out2) {
+			ROS_INFO("(%f,%f)",
+								p.pose.position.x,
+								p.pose.position.y);
+		}
+	}
+	void test_genpath(){
+		path_init_corner(20,5,10,1,20);
+		for(auto p:path_points) {
+			ROS_INFO("(%f,%f,%f)",p.pose.position.x,p.pose.position.y,p.pose.position.z);
+		}
 
-	void path_init(double time,double length,double width,double height,double ros_freq){
+	}
+	void path_init_corner(double time,double length,double width,double height,double ros_freq){
+		idx=0;
+		path_points.clear();
+		int point_length=(int) (time*ros_freq*length*0.5/(length+width));
+		int point_width=(int) (time*ros_freq*width*0.5/(length+width));
+		geometry_msgs::PoseStamped tmp;
+		tmp.pose.position.x=-length/2.0;
+		tmp.pose.position.y=-width/2.0;
+		tmp.pose.position.z=height;//hard code...
+		ROS_INFO("length point is %d", point_length);
+		ROS_INFO("width point is %d", point_width);
+
+		vector<geometry_msgs::PoseStamped> out;
+		
+
+	    ROS_INFO("Generate point...");
+	    gen_sigmoid(-length/2.0, length,point_length,out,1.0);
+		for(int i=0;i<point_length;i++) {//x:-L/2 -> L/2, y:-w/2
+			tmp.pose.position.y=-width/2.0;
+			tmp.pose.position.x=length/2.0;
+			path_points.push_back(tmp);
+		}
+		gen_sigmoid(-width/2.0, width,point_width,out,1.0);
+		for(int i=0;i<point_width;i++) {//x: L/2, y:-w/2 -> w/2
+			tmp.pose.position.x=length/2.0;
+			tmp.pose.position.y=width/2.0;
+			path_points.push_back(tmp);
+		}
+		gen_sigmoid(length/2.0, length,point_length,out,-1.0);
+		for(int i=0;i<point_length;i++) {//x: L/2 -> -L/2, y:W/2 
+			tmp.pose.position.y=width/2.0;
+			tmp.pose.position.x=-length/2.0;
+			path_points.push_back(tmp);
+		}
+		gen_sigmoid(width/2.0, width,point_width,out,-1.0);
+		for(int i=0;i<point_width;i++) {//x: -L/2, y:W/2 -> -W/2
+			tmp.pose.position.x=-length/2.0;
+			tmp.pose.position.y=-width/2.0;
+			path_points.push_back(tmp);
+		}
+	}
+	void path_init_ratio(double time,double length,double width,double height,double ros_freq){
+		idx=0;
+		path_points.clear();
+		int point_length=(int) (time*ros_freq*length*0.5/(length+width));
+		int point_width=(int) (time*ros_freq*width*0.5/(length+width));
+		geometry_msgs::PoseStamped tmp;
+		tmp.pose.position.x=-length/2.0;
+		tmp.pose.position.y=-width/2.0;
+		tmp.pose.position.z=height;//hard code...
+		ROS_INFO("length point is %d", point_length);
+		ROS_INFO("width point is %d", point_width);
+
+
+	    ROS_INFO("Generate point...");
+	    double ratio=0.95;
+	    double left_len,start,forward_dis;
+
+	    left_len=length;
+	    start=-length/2.0;
+		for(int i=0;i<point_length;i++) {
+			tmp.pose.position.x=start;
+			path_points.push_back(tmp);
+
+			forward_dis=left_len*(1-ratio);
+			start=start+forward_dis;
+			left_len=length/2.0-start;
+
+		}
+
+	    left_len=width;
+	    start=-width/2.0;
+		for(int i=0;i<point_width;i++) {
+			tmp.pose.position.y=start;
+			path_points.push_back(tmp);
+
+			forward_dis=left_len*(1-ratio);
+			start=start+forward_dis;
+			left_len=width/2.0-start;
+
+		}
+
+	    left_len=length;
+	    start=length/2.0;
+		for(int i=0;i<point_length;i++) {
+			tmp.pose.position.x=start;
+			path_points.push_back(tmp);
+
+			forward_dis=left_len*(1-ratio);
+			start=start-forward_dis;
+			left_len=start+length/2.0;
+			
+		}
+
+	    left_len=width;
+	    start=width/2.0;
+		for(int i=0;i<point_width;i++) {
+			tmp.pose.position.y=start;
+			path_points.push_back(tmp);
+
+			forward_dis=left_len*(1-ratio);
+			start=start-forward_dis;
+			left_len=width/2.0+start;
+		}
+
+	}
+	void path_init_sigmoid(double time,double length,double width,double height,double ros_freq){
+		idx=0;
+		path_points.clear();
+		int point_length=(int) (time*ros_freq*length*0.5/(length+width));
+		int point_width=(int) (time*ros_freq*width*0.5/(length+width));
+		geometry_msgs::PoseStamped tmp;
+		tmp.pose.position.x=-length/2.0;
+		tmp.pose.position.y=-width/2.0;
+		tmp.pose.position.z=height;//hard code...
+		ROS_INFO("length point is %d", point_length);
+		ROS_INFO("width point is %d", point_width);
+
+		vector<geometry_msgs::PoseStamped> out;
+		
+
+	    ROS_INFO("Generate point...");
+	    gen_sigmoid(-length/2.0, length,point_length,out,1.0);
+		for(int i=0;i<point_length;i++) {//x:-L/2 -> L/2, y:-w/2
+			tmp.pose.position.y=-width/2.0;
+			tmp.pose.position.x=out[i].pose.position.y;
+			path_points.push_back(tmp);
+		}
+		gen_sigmoid(-width/2.0, width,point_width,out,1.0);
+		for(int i=0;i<point_width;i++) {//x: L/2, y:-w/2 -> w/2
+			tmp.pose.position.x=length/2.0;
+			tmp.pose.position.y=out[i].pose.position.y;
+			path_points.push_back(tmp);
+		}
+		gen_sigmoid(length/2.0, length,point_length,out,-1.0);
+		for(int i=0;i<point_length;i++) {//x: L/2 -> -L/2, y:W/2 
+			tmp.pose.position.y=width/2.0;
+			tmp.pose.position.x=out[i].pose.position.y;
+			path_points.push_back(tmp);
+		}
+		gen_sigmoid(width/2.0, width,point_width,out,-1.0);
+		for(int i=0;i<point_width;i++) {//x: -L/2, y:W/2 -> -W/2
+			tmp.pose.position.x=-length/2.0;
+			tmp.pose.position.y=out[i].pose.position.y;
+			path_points.push_back(tmp);
+		}
+
+	}
+	void path_init_halfsigmoid(double time,double length,double width,double height,double ros_freq){
+		idx=0;
+		path_points.clear();
+		int point_length=(int) (time*ros_freq*length*0.5/(length+width));
+		int point_width=(int) (time*ros_freq*width*0.5/(length+width));
+		geometry_msgs::PoseStamped tmp;
+		tmp.pose.position.x=-length/2.0;
+		tmp.pose.position.y=-width/2.0;
+		tmp.pose.position.z=height;//hard code...
+		ROS_INFO("length point is %d", point_length);
+		ROS_INFO("width point is %d", point_width);
+
+		vector<geometry_msgs::PoseStamped> out;
+		
+
+	    ROS_INFO("Generate point...");
+	    gen_halfsigmoid(-length/2.0, length,point_length,out,1.0);
+		for(int i=0;i<point_length;i++) {//x:-L/2 -> L/2, y:-w/2
+			tmp.pose.position.y=-width/2.0;
+			tmp.pose.position.x=out[i].pose.position.y;
+			path_points.push_back(tmp);
+		}
+		gen_halfsigmoid(-width/2.0, width,point_width,out,1.0);
+		for(int i=0;i<point_width;i++) {//x: L/2, y:-w/2 -> w/2
+			tmp.pose.position.x=length/2.0;
+			tmp.pose.position.y=out[i].pose.position.y;
+			path_points.push_back(tmp);
+		}
+		gen_halfsigmoid(length/2.0, length,point_length,out,-1.0);
+		for(int i=0;i<point_length;i++) {//x: L/2 -> -L/2, y:W/2 
+			tmp.pose.position.y=width/2.0;
+			tmp.pose.position.x=out[i].pose.position.y;
+			path_points.push_back(tmp);
+		}
+		gen_halfsigmoid(width/2.0, width,point_width,out,-1.0);
+		for(int i=0;i<point_width;i++) {//x: -L/2, y:W/2 -> -W/2
+			tmp.pose.position.x=-length/2.0;
+			tmp.pose.position.y=out[i].pose.position.y;
+			path_points.push_back(tmp);
+		}
+
+	}
+	void path_init_average(double time,double length,double width,double height,double ros_freq){
 		idx=0;
 		path_points.clear();
 		int point_length=(int) (time*ros_freq*length*0.5/(length+width));
@@ -55,8 +270,33 @@ public:
 		idx = idx+1;
 		return path_points.at(p);
 	}
-
+protected:
+	void gen_sigmoid(double start, double range,int point_num,vector<geometry_msgs::PoseStamped> &output,double positive) {
+		int cnt=0;
+		output.clear();
+		for(double x=-5.0;cnt++<point_num;x+=10.0/point_num) {
+			double y=start+positive*range/(1+exp(-x));
+			geometry_msgs::PoseStamped tmp;
+			tmp.pose.position.x=x/10.0+0.5;
+			tmp.pose.position.y=y;
+			tmp.pose.position.z=0;
+			output.push_back(tmp);
+		}
+	}
+	void gen_halfsigmoid(double start, double range,int point_num,vector<geometry_msgs::PoseStamped> &output,double positive) {
+		int cnt=0;
+		output.clear();
+		for(double x=0;cnt++<point_num;x+=5.0/point_num) {
+			double y=start+positive*range*(-0.5+1/(1+exp(-x)))*2;
+			geometry_msgs::PoseStamped tmp;
+			tmp.pose.position.x=x/5.0;
+			tmp.pose.position.y=y;
+			tmp.pose.position.z=0;
+			output.push_back(tmp);
+		}
+	}
 private:
+
 	vector<geometry_msgs::PoseStamped> path_points; 
 	int idx;
 };
@@ -94,14 +334,16 @@ int main(int argc, char **argv)
 	double width,length,height,period;
 	int state_mach=0;
 	Planning planning;
-	double rosrate=20.0;//hard code..
+
+	double rosrate=40.0;//hard code..
 
     ros::init(argc, argv, "offb_node");
+    planning.test_genpath();
     //=================topics=================
     ros::NodeHandle nh;
 
     ros::Subscriber state_sub = nh.subscribe<mavros_msgs::State>
-            ("mavros/state", 10, state_cb);
+            ("mavros/state", 1, state_cb);
     ros::Publisher local_pos_pub = nh.advertise<geometry_msgs::PoseStamped>
             ("mavros/setpoint_position/local", 10);
     ros::ServiceClient arming_client = nh.serviceClient<mavros_msgs::CommandBool>
@@ -171,6 +413,8 @@ int main(int argc, char **argv)
 
     mavros_msgs::State last_state=current_state;
     int fly_count=0;
+    ros::Time sendtick1 = ros::Time::now();
+    ros::Time sendtick2 = ros::Time::now();
 
     while(ros::ok()){
     	
@@ -178,9 +422,13 @@ int main(int argc, char **argv)
 		realtimepath.poses.push_back(current_location); 	
 		
 		if(realtimepath.poses.size()>1000) realtimepath.poses.erase(realtimepath.poses.begin());
-		realtimepath.header.stamp=ros::Time::now();;
-		realtimepath.header.frame_id="map";
-		realtimepath_pub.publish(realtimepath);
+        if(ros::Time::now()-sendtick1>ros::Duration(0.5)) {
+            realtimepath.header.stamp=ros::Time::now();;
+            realtimepath.header.frame_id="map";
+            realtimepath_pub.publish(realtimepath);     
+            sendtick1=ros::Time::now();
+        }
+
 		//reinitize when switch to manual control...
     	if (last_state.armed!=current_state.armed ||last_state.mode!=current_state.mode) {
     		ROS_INFO("state changed: armed: %d,mode:%s",current_state.armed==true,current_state.mode.c_str());
@@ -210,7 +458,7 @@ int main(int argc, char **argv)
     			if (current_state.armed==true &&
     				current_state.mode == "OFFBOARD" ) {
     				ROS_INFO("Step1 OK:ARMED and OFFBOARD received! Go to start point...");
-    				planning.path_init(period,length,width,height,rosrate);
+    				planning.path_init_corner(period,length,width,height,rosrate);
 					givenpath.poses.clear();
 					actualpath.poses.clear();
 					fly_count=0;
@@ -281,13 +529,16 @@ int main(int argc, char **argv)
 				//limit the bandwidth			
 				if(givenpath.poses.size()>1000) givenpath.poses.erase(givenpath.poses.begin());
 				if(actualpath.poses.size()>1000) actualpath.poses.erase(actualpath.poses.begin());
-	
-			    givenpath.header.stamp=ros::Time::now();;
-			    givenpath.header.frame_id="map";
-				givenpath_pub.publish(givenpath); 
-			    actualpath.header.stamp=ros::Time::now();;
-			    actualpath.header.frame_id="map";
-				actualpath_pub.publish(actualpath); 
+	            if(ros::Time::now()-sendtick2>ros::Duration(0.5)) {
+                    givenpath.header.stamp=ros::Time::now();;
+                    givenpath.header.frame_id="map";
+                    givenpath_pub.publish(givenpath); 
+                    actualpath.header.stamp=ros::Time::now();;
+                    actualpath.header.frame_id="map";
+                    actualpath_pub.publish(actualpath); 
+                    sendtick2=ros::Time::now();
+                }
+
     			break;
     		default:
     			ROS_INFO("erroneous state_machine index!");
