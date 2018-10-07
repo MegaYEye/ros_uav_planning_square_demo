@@ -11,6 +11,7 @@ roscpp
 rospy
 std_msgs
 nav_msgs
+visualization_msgs
 tf
 )
 catkin_package()

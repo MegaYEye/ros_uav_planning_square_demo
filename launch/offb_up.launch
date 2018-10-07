@@ -5,10 +5,6 @@
 	<param name = "/infoday/period" value = "3"/>
 	<include file="$(find vicon_bridge)/launch/vicon.launch"/>
 	<include file="$(find mavros)/launch/FJ005.launch"/>
-<<<<<<< HEAD
 	<node pkg="offb" type ="hole_node" name="hole_node" output="screen"/>
-=======
-	<node pkg="offb" type ="offb_node" name="offb_node" output="screen"/>
->>>>>>> 521dbb8a13b20389cac1a49d3eedfe864c201574
 </launch>
 
