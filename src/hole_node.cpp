@@ -195,7 +195,9 @@ public:
 
                 break;
             case 2: 
-                cross_checker();
+                if(cross_checker()){
+                    crossed=1;
+                }
                 if(is_gate_moving() && !crossed) {
                     state_mach=0;
                     timer=ros::Time::now();
