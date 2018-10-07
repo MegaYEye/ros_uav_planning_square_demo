@@ -20,7 +20,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 #include <Eigen/StdVector>
-//#define DEBUG
+// #define DEBUG
  // #define BOARD_DEBUG
 using namespace std;
 
@@ -34,12 +34,19 @@ step 4: pass through
 step 5: go to p_READY_B position
 step 6: land...
 */
+enum PLAN_STATE{
+    PLAN_STATE_INIT=0,
+    PLAN_STATE_PLANNING,
+    PLAN_STATE_DAEMON
+} ;
+
 class Planning {
 public:
     geometry_msgs::PoseStamped p_READY_A;
     geometry_msgs::PoseStamped p_READY_B;
     geometry_msgs::PoseStamped p_land;
     vector<geometry_msgs::PoseStamped> trajectory;
+    int crossed=0;
 
     Planning(){}
     void printinfo() {
@@ -117,7 +124,7 @@ public:
     }
     void plan_reset(double ros_rate) {
         ROS_INFO("(planning info) plan reset!");
-        state_mach=0;
+        plan_state=PLAN_STATE_INIT;
         rosrate=ros_rate;
         timer=ros::Time::now();
 
@@ -151,7 +158,7 @@ public:
     void plan_cross_path() {
         double spd=0.5;
         #ifdef DEBUG
-        spd/=10;
+        spd/=2;
         #endif
         add_traj(p_uav_current,p_READY_A,spd);
         add_hover(p_READY_A,1);
@@ -163,53 +170,56 @@ public:
         spd/=10;
         #endif
         add_traj(p_READY_B, p_land,spd);
+        add_hover(p_land,3);
     }
 
-    bool plan_service(geometry_msgs::PoseStamped g, geometry_msgs::PoseStamped u) {
+
+
+    enum PLAN_STATE plan_service(geometry_msgs::PoseStamped g, geometry_msgs::PoseStamped u) {
         p_uav_current=u;
         p_gate_current=g;
-        bool wait=true;
+        
 
-        switch(state_mach) {
-            case 0:
+        switch(plan_state) {
+            case PLAN_STATE_INIT:
                 if(ros::Time::now()-timer>ros::Duration(1)) {
-                    state_mach++;
+                    plan_state=PLAN_STATE_PLANNING;
                     plan_init(g,u);
                     ROS_INFO("(planning info 0) step 0->1");
                 }
                 ROS_INFO_THROTTLE(0.5,"(planning info 0) waiting timer...");
                 break;
-            case 1:
+            case PLAN_STATE_PLANNING:
                 ROS_INFO("(planning info 1): planning...");
                 plan_points();
                 if(sqrt(a*a+b*b+c*c)>1e-4) {
                     plan_cross_path();    
                     plan_landing_path();  
-                    state_mach++;
+                    plan_state=PLAN_STATE_DAEMON;
                     printinfo();                   
                 }
                 else {
-                    state_mach=0;
+                    plan_state=PLAN_STATE_INIT;
                     ROS_INFO("(planning info 1): calculating failure! re-init!");
                 }
 
                 break;
-            case 2: 
+            case PLAN_STATE_DAEMON: 
                 if(cross_checker()){
                     crossed=1;
                 }
                 if(is_gate_moving() && !crossed) {
-                    state_mach=0;
+                    plan_state=PLAN_STATE_INIT;
                     timer=ros::Time::now();
                     ROS_INFO("(planning info 0): gate moving! goto state 0");
                 }
                 else{}//do nothing...
-                if(state_mach!=0) wait=false;
+                //if(plan_state!=PLAN_STATE_INIT) wait=false;
         }
 
         p_gate_last=p_gate_current;
         p_uav_last=p_uav_current;
-        return wait;
+        return plan_state;
 
     }
 
@@ -303,15 +313,15 @@ private:
     
     double a,b,c,d;//ax+by+cz+d=0
     double cross_len=0.6;
-    double land_len=0.3;
+    double land_len=0.6;
     double rosrate=40.0;
 
 
     
-
-    int state_mach=0;
+    enum PLAN_STATE plan_state=PLAN_STATE_INIT;
+    //int state_mach;
     int filter=0;
-    int crossed=0;
+    
 
     ros::Time timer;
 
@@ -383,7 +393,7 @@ void gate_echo_rotate(geometry_msgs::PoseStamped &p){
         p.pose.orientation.y=rotatedP.y();
         p.pose.orientation.z=rotatedP.z();
         //ROS_INFO("%f*x+%f*y+%f*z+%f=0",aa,bb,cc,dd);
-    }
+}
 
 int main(int argc, char **argv)
 {
@@ -461,6 +471,7 @@ int main(int argc, char **argv)
     gate_marker.color.b = 0.0;
 
     int flight_tick=0;
+    int travel_cnt=0;
 
 
     // wait for FCU connection
@@ -492,6 +503,7 @@ int main(int argc, char **argv)
     geometry_msgs::PoseStamped tar;
     geometry_msgs::PoseStamped takeoff_location;
     geometry_msgs::PoseStamped land_location;
+    geometry_msgs::PoseStamped midstep_hover_location;
     geometry_msgs::PoseStamped offset;
     geometry_msgs::PoseStamped traj;
     geometry_msgs::PoseStamped realtime;
@@ -605,6 +617,7 @@ int main(int argc, char **argv)
 
                     ROS_INFO("Step0->1: all signal ready!");
                     // planning.printinfo();
+                    travel_cnt=0;
                     state_mach++;
                 }
                 else {
@@ -628,13 +641,12 @@ int main(int argc, char **argv)
                     state_mach++;
                     flight_tick=0;
                     planning.plan_reset(rosrate);
-                    tick_st=ros::Time::now();
                     ROS_INFO("Step1->2: uav has taken off!");
                 }
                 break;
             case 2:  
                 
-                if(planning.plan_service(global_pose_gate,current_location)) {//path is not ready yet..
+                if(planning.plan_service(global_pose_gate,current_location)!=PLAN_STATE::PLAN_STATE_DAEMON) {//path is not ready yet..
                     #ifndef DEBUG
                     local_pos_pub.publish(current_location); //hover...
                     #endif 
@@ -654,22 +666,50 @@ int main(int argc, char **argv)
                         #ifndef DEBUG
                         local_pos_pub.publish(planning.trajectory[flight_tick]);
                         #endif            
-                        flight_tick++;   
-                        ROS_INFO_THROTTLE(0.5,"(step 2) moveto:(%lf,%lf,%lf), current_location:(%lf,%lf,%lf)"
+                         
+                        ROS_INFO_THROTTLE(0.5,"(step 2) moveto:(%lf,%lf,%lf), current_location:(%lf,%lf,%lf), crossed:%d"
                                                                 ,planning.trajectory[flight_tick].pose.position.x
                                                                 ,planning.trajectory[flight_tick].pose.position.y
                                                                 ,planning.trajectory[flight_tick].pose.position.z
                                                                 ,current_location.pose.position.x
                                                                 ,current_location.pose.position.y
-                                                                ,current_location.pose.position.z);     
+                                                                ,current_location.pose.position.z,
+                                                                planning.crossed); 
+                        //this var would be the last location in the command series...
+                        midstep_hover_location = planning.trajectory[flight_tick]; 
+                        flight_tick++;   
                     }
                     else {
-                        state_mach=99;
+                        tick_st=ros::Time::now();
+                        state_mach++;
                         ROS_INFO("trajectory finish! flight_tick:%d",flight_tick);
+
+                        if(travel_cnt>=1) {
+                            state_mach=99;
+                            ROS_INFO("travel_cnt >=1 satisfied! landing!");
+                        }
                     }
                 }
+                break;
+            case 3:
+                if(ros::Time::now()-tick_st<ros::Duration(5)) { 
+                    #ifndef DEBUG
+                    local_pos_pub.publish(midstep_hover_location);
+                    #endif
+                    ROS_INFO_THROTTLE(1,"(step3): hovering...loc:(%lf,%lf,%lf)",midstep_hover_location.pose.position.x
+                                                                           ,midstep_hover_location.pose.position.y
+                                                                           ,midstep_hover_location.pose.position.z);
+                }
+                else {
+                    state_mach++;
+                    flight_tick=0;
+                    planning.plan_reset(rosrate);
+                    ROS_INFO("midstep-hovering finish!");
+                    state_mach=2; //go back...
+                    travel_cnt++;
+                }
+                break;
 
-                break;   
             case 99:
                 if(ros::Time::now()-tick_st<ros::Duration(2)){
                     #ifndef DEBUG
