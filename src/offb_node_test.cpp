@@ -421,7 +421,7 @@ int main(int argc, char **argv)
     	realtime=current_location;	
 		realtimepath.poses.push_back(current_location); 	
 		
-		if(realtimepath.poses.size()>100) realtimepath.poses.erase(realtimepath.poses.begin());
+		if(realtimepath.poses.size()>1000) realtimepath.poses.erase(realtimepath.poses.begin());
         if(ros::Time::now()-sendtick1>ros::Duration(0.5)) {
             realtimepath.header.stamp=ros::Time::now();;
             realtimepath.header.frame_id="map";
@@ -470,7 +470,6 @@ int main(int argc, char **argv)
 				tar.pose.position.x=-length/2.0;
 				tar.pose.position.y=-width/2.0;
 				tar.pose.position.z=height;
-
 				
 				takeoff.pose.position.x=0;
 				takeoff.pose.position.y=0;
@@ -479,27 +478,15 @@ int main(int argc, char **argv)
 				//10 secs to take off
 				if (fly_count<10*rosrate) {
 					tmp=pose_add(takeoff,offset);
-				tmp.pose.orientation.x=sqrt(2)/2;
-				tmp.pose.orientation.y=0;
-				tmp.pose.orientation.z=0;
-				tmp.pose.orientation.w=sqrt(2)/2;
 				   	local_pos_pub.publish(tmp);
-				   	ROS_INFO_THROTTLE(1, "(takeoff)time:%lf,tarpos:(%lf,%lf,%lf,%lf,%lf,%lf,%lf),actualpos:(%lf,%lf,%lf,%lf,%lf,%lf,%lf)"
+				   	ROS_INFO_THROTTLE(1, "(takeoff)time:%lf,tarpos:(%lf,%lf,%lf),actualpos:(%lf,%lf,%lf)"
 				   						,fly_count/rosrate
 				   						,tmp.pose.position.x
 				   						,tmp.pose.position.y
 				   						,tmp.pose.position.z
-				   						,tmp.pose.orientation.x
-				   						,tmp.pose.orientation.y
-				   						,tmp.pose.orientation.z
-				   						,tmp.pose.orientation.w
 				   						,current_location.pose.position.x
 				   						,current_location.pose.position.y
-				   						,current_location.pose.position.z
-				   						,current_location.pose.orientation.x
-				   						,current_location.pose.orientation.y
-				   						,current_location.pose.orientation.z
-				   						,current_location.pose.orientation.w);	
+				   						,current_location.pose.position.z);	
 				   					
 				}
 				else if (fly_count<30*rosrate) {
@@ -540,9 +527,9 @@ int main(int argc, char **argv)
 				givenpath.poses.push_back(tmp); 
 				actualpath.poses.push_back(current_location); 	
 				//limit the bandwidth			
-				if(givenpath.poses.size()>100) givenpath.poses.erase(givenpath.poses.begin());
-				if(actualpath.poses.size()>100) actualpath.poses.erase(actualpath.poses.begin());
-	            if(ros::Time::now()-sendtick2>ros::Duration(1)) {
+				if(givenpath.poses.size()>1000) givenpath.poses.erase(givenpath.poses.begin());
+				if(actualpath.poses.size()>1000) actualpath.poses.erase(actualpath.poses.begin());
+	            if(ros::Time::now()-sendtick2>ros::Duration(0.5)) {
                     givenpath.header.stamp=ros::Time::now();;
                     givenpath.header.frame_id="map";
                     givenpath_pub.publish(givenpath); 
