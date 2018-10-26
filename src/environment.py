@@ -70,56 +70,58 @@ class Env:
 			#y:large->small x:same
 			if square_xdown_order == s_old[0]:
 				if dx==0 and dy<0:
-					reward+=10
+					reward=1.01
 				else:
-					reward=-25
+					reward=-1.5
 			#y:small->large x:same
 			if square_xup_order == s_old[0]:
 				if dx==0 and dy>0:
-					reward+=10
+					reward=1.02
 				else:
-					reward=-25
+					reward=-1.5
 
 		if square_xdown_order<=s_old[0] and square_xup_order>=s_old[0]:
 			#x:small->large y:same
 			if square_ydown_order == s_old[1]:
 				if dx>0 and dy==0:
-					reward+=10
+					reward=1.03
 				else:
-					reward=-25
+					reward=-1.5
 			#x:large->small y:same
 			if square_yup_order == s_old[1]:
 				if dx<0 and dy==0:
-					reward+=10
+					reward=1.04
 				else:
-					reward=-25
+					reward=-1.5
+		if reward<1e-6 and reward>-1e-6:
 
-		if square_ydown_order<=s_new[1] and square_yup_order>=s_new[1]:
-			#x move
-			if square_xdown_order == s_new[0]:
-				if dx!=0:
-					reward+=5
+			if square_ydown_order<=s_new[1] and square_yup_order>=s_new[1]:
+				#x move
+				if square_xdown_order == s_new[0]:
+					if dx!=0:
+						reward=1.05
 
-			#x move
-			if square_xup_order == s_new[0]:
-				if dx!=0 :
-					reward+=5
+				#x move
+				if square_xup_order == s_new[0]:
+					if dx!=0 :
+						reward=1.06
 
 
-		if square_xdown_order<=s_new[0] and square_xup_order>=s_new[0]:
-			#y move
-			if square_ydown_order == s_new[1]:
-				if dy!=0:
-					reward+=5
+			if square_xdown_order<=s_new[0] and square_xup_order>=s_new[0]:
+				#y move
+				if square_ydown_order == s_new[1]:
+					if dy!=0:
+						reward=1.07
 
-			#y move
-			if square_yup_order == s_new[1]:
-				if dy!=0:
-					reward+=5
-		if reward!=0:
+				#y move
+				if square_yup_order == s_new[1]:
+					if dy!=0:
+						reward=1.08
+
+		if not (reward<1e-6 and reward>-1e-6):
 			print('============reward get!================',reward)
 		else:
-			reward=-20
+			reward=-3
 
 		return reward
 

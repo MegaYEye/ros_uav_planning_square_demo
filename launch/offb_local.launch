@@ -1,8 +1,8 @@
 <launch>
-	<param name = "/infoday/length" value = "20"/>
-	<param name = "/infoday/width" value = "20"/>
+	<param name = "/infoday/length" value = "1"/>
+	<param name = "/infoday/width" value = "1"/>
 	<param name = "/infoday/height" value = "1.5"/>
-	<param name = "/infoday/period" value = "15"/>
+	<param name = "/infoday/period" value = "10"/>
 
 	<node pkg="offb" type ="offb_node" name="offb_node" output="screen"/>
 </launch>

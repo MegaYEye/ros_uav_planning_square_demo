@@ -1,0 +1,2 @@
+model_checkpoint_path: "q_approx_bak.ckpt"
+all_model_checkpoint_paths: "q_approx_bak.ckpt"
